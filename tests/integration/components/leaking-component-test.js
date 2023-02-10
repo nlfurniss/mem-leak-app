@@ -1,149 +1,46 @@
-/* global FinalizationRegistry, WeakRef, gc */
+/* global WeakRef, gc */
 
 import QUnit, { module, test } from 'qunit';
 import { setupRenderingTest } from 'mem-leak-app/tests/helpers';
 import { render } from '@ember/test-helpers';
-import { hbs } from 'ember-cli-htmlbars';
+import Component from '@glimmer/component';
 
-function detectIfMemoryIsLeaked() {
-  gc();
-  gc();
-  gc();
-
-  // eslint-disable-next-line no-restricted-syntax, no-unused-vars
-  for (const [owner, testNames] of window.leakReg) {
-    debugger;
-    // throw Error('got to hooks.after');
-  }
-}
+let OwnerRefs = [];
 
 QUnit.on('testStart', () => {
   const currentTest = QUnit.config.current;
   const { finish } = currentTest;
-  const { pushFailure } = currentTest;
-
-  // eslint-disable-next-line consistent-return
-  currentTest.pushFailure = function (message) {
-    if (message.indexOf('got to hooks.after') === 0) {
-      debugger;
-    } else {
-      return pushFailure.apply(this, arguments);
-    }
-  };
 
   currentTest.finish = async function () {
-    const doFinish = () => finish.apply(this, arguments);
+    currentTest.testEnvironment = null;
 
-    const finishResult = await doFinish();
+    gc();
+    gc();
+    gc();
 
-    detectIfMemoryIsLeaked(this);
+    // eslint-disable-next-line no-restricted-syntax, no-unused-vars
+    for (let i = 0; i < OwnerRefs.length; i++) {
+      let ref = OwnerRefs[i];
+      if (ref.deref()) {
+        let message = `Leaked an owner`;
+        currentTest.expected++;
+        currentTest.assert.pushResult({
+          result: false,
+          message: `${message} \nMore information has been printed to the console. Please use that information to help in debugging.\n\n`,
+        });
+      }
+    }
 
-    return finishResult;
+    OwnerRefs = [];
+
+    // let finishResult = await finish.apply(this, arguments);
+    return await finish.apply(this, arguments);
   };
 });
 
-class IterableWeakMap {
-  #weakMap = new WeakMap();
-
-  #refSet = new Set();
-
-  // eslint-disable-next-line no-use-before-define
-  #finalizationGroup = new FinalizationRegistry(IterableWeakMap.#cleanup);
-
-  static #cleanup({ set, ref }) {
-    set.delete(ref);
-  }
-
-  set(key, value) {
-    const ref = new WeakRef(key);
-
-    this.#weakMap.set(key, { value, ref });
-    this.#refSet.add(ref);
-    this.#finalizationGroup.register(
-      key,
-      {
-        set: this.#refSet,
-        ref,
-      },
-      ref
-    );
-  }
-
-  get(key) {
-    const entry = this.#weakMap.get(key);
-    return entry && entry.value;
-  }
-
-  delete(key) {
-    const entry = this.#weakMap.get(key);
-    if (!entry) {
-      return false;
-    }
-
-    this.#weakMap.delete(key);
-    this.#refSet.delete(entry.ref);
-    this.#finalizationGroup.unregister(entry.ref);
-    return true;
-  }
-
-  *[Symbol.iterator]() {
-    // eslint-disable-next-line no-restricted-syntax
-    for (const ref of this.#refSet) {
-      const key = ref.deref();
-      // eslint-disable-next-line no-continue
-      if (!key) continue;
-      const { value } = this.#weakMap.get(key);
-      yield [key, value];
-    }
-  }
-
-  entries() {
-    return this[Symbol.iterator]();
-  }
-
-  *keys() {
-    // eslint-disable-next-line no-restricted-syntax, no-unused-vars
-    for (const [key, value] of this) {
-      yield key;
-    }
-  }
-
-  *values() {
-    // eslint-disable-next-line no-restricted-syntax, no-unused-vars
-    for (const [key, value] of this) {
-      yield value;
-    }
-  }
-}
-
 function setupLeakCatcher(hooks) {
-  // let reg;
-
-  hooks.before(function () {
-    window.leakReg = new IterableWeakMap();
-  });
-
   hooks.beforeEach(function () {
-    const { owner } = this;
-    const testName = `${QUnit.config.current.module.name}: ${QUnit.config.current.testName}`;
-
-    const existing = window.leakReg.get(owner);
-    // TODO: rwjblue doesn't think this can happen?
-    if (existing) {
-      existing.push(testName);
-    } else {
-      window.leakReg.set(owner, testName);
-    }
-  });
-
-  hooks.after(function () {
-    // gc();
-    // gc();
-    // gc();
-    // // eslint-disable-next-line no-restricted-syntax, no-unused-vars
-    // for (const [owner, testNames] of reg) {
-    //   // throw Error('got to hooks.after');
-    // }
+    OwnerRefs.push(new WeakRef(this.owner));
   });
 }
 
@@ -151,21 +48,23 @@ module('Integration | Component | leaking-component', function (hooks) {
   setupRenderingTest(hooks);
   setupLeakCatcher(hooks);
 
-  test('it renders', async function (assert) {
-    // Set any properties with this.set('myProperty', 'value');
-    // Handle any actions with this.set('myAction', function(val) { ... });
+  test('it errors if the component has a leak', async function (assert) {
+    assert.expect(0);
 
-    await render(hbs`<LeakingComponent />`);
+    await render(
+      class LeakingComponent extends Component {
+        constructor() {
+          super(...arguments);
+          document.body.addEventListener('click', () => {
+            console.log(this);
+          });
+        }
+      }
+    );
+  });
 
-    assert.dom(this.element).hasText('');
-
-    // Template block usage:
-    await render(hbs`
-      <LeakingComponent>
-        template block text
-      </LeakingComponent>
-    `);
-
-    assert.dom(this.element).hasText('template block text');
+  test('it does not error if the component does not leak', async function (assert) {
+    assert.expect(0);
+    await render(Component);
   });
 });
