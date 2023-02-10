@@ -23,6 +23,7 @@
     "test:ember": "ember test"
   },
   "devDependencies": {
+    "@ember/legacy-built-in-components": "^0.4.2",
     "@ember/optional-features": "^2.0.0",
     "@ember/string": "^3.0.1",
     "@ember/test-helpers": "^2.9.3",
@@ -41,6 +42,7 @@
     "ember-cli-sri": "^2.1.1",
     "ember-cli-terser": "^4.0.2",
     "ember-data": "~4.9.1",
+    "ember-engines": "^0.9.0",
     "ember-fetch": "^8.1.2",
     "ember-load-initializers": "^2.1.2",
     "ember-page-title": "^7.0.0",
@@ -67,5 +69,10 @@
   },
   "ember": {
     "edition": "octane"
+  },
+  "ember-addon": {
+    "paths": [
+      "lib/whatever"
+    ]
   }
 }

@@ -2,7 +2,7 @@
 
 import QUnit, { module, test } from 'qunit';
 import { setupRenderingTest } from 'mem-leak-app/tests/helpers';
-import { render } from '@ember/test-helpers';
+import { render, visit } from '@ember/test-helpers';
 import Component from '@glimmer/component';
 
 let OwnerRefs = [];
@@ -46,6 +46,15 @@ Application.prototype.buildInstance = function buildInstance(options) {
   return owner;
 };
 
+import Engine from '@ember/engine';
+import { setupApplicationTest } from 'ember-qunit';
+const originalBuildEngineInstance = Engine.prototype.buildInstance;
+Engine.prototype.buildInstance = function buildInstance(options) {
+  let owner = originalBuildEngineInstance.call(this, options);
+  OwnerRefs.push(new WeakRef(owner));
+  return owner;
+};
+
 function invertAssertExpectation(assert) {
   assert.test._originalPushResult = assert.test.pushResult;
   assert.test.pushResult = function (resultInfo) {
@@ -79,5 +88,20 @@ module('Integration | Component | leaking-component', function (hooks) {
   test('it does not error if the component does not leak', async function (assert) {
     assert.expect(0);
     await render(Component);
+  });
+});
+
+module('Engines', function (hooks) {
+  setupApplicationTest(hooks);
+
+  test('it errors if the route has a leak', async function (assert) {
+    assert.expect(0);
+    invertAssertExpectation(assert);
+    await visit('/whatever/leak');
+  });
+
+  test('it does not error if the route does have a leak', async function (assert) {
+    assert.expect(0);
+    await visit('/whatever/no-leak');
   });
 });
