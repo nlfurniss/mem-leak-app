@@ -38,18 +38,31 @@ QUnit.on('testStart', () => {
   };
 });
 
-function setupLeakCatcher(hooks) {
-  hooks.beforeEach(function () {
-    OwnerRefs.push(new WeakRef(this.owner));
-  });
+import Application from '@ember/application';
+const originalBuildApplicationInstance = Application.prototype.buildInstance;
+Application.prototype.buildInstance = function buildInstance(options) {
+  let owner = originalBuildApplicationInstance.call(this, options);
+  OwnerRefs.push(new WeakRef(owner));
+  return owner;
+};
+
+function invertAssertExpectation(assert) {
+  assert.test._originalPushResult = assert.test.pushResult;
+  assert.test.pushResult = function (resultInfo) {
+    // Inverts the result so we can test failing assertions
+    resultInfo.result = !resultInfo.result;
+    resultInfo.message = `Failed: ${resultInfo.message}`;
+    this._originalPushResult(resultInfo);
+  };
 }
 
 module('Integration | Component | leaking-component', function (hooks) {
   setupRenderingTest(hooks);
-  setupLeakCatcher(hooks);
 
   test('it errors if the component has a leak', async function (assert) {
     assert.expect(0);
+
+    invertAssertExpectation(assert);
 
     await render(
       class LeakingComponent extends Component {
