@@ -1,59 +1,65 @@
 /* global WeakRef, gc */
 
 import QUnit, { module, test } from 'qunit';
-import { setupRenderingTest } from 'mem-leak-app/tests/helpers';
+import {
+  setupRenderingTest,
+  setupApplicationTest,
+} from 'mem-leak-app/tests/helpers';
 import { render, visit } from '@ember/test-helpers';
 import Component from '@glimmer/component';
 
-let OwnerRefs = [];
-
-QUnit.on('testStart', () => {
-  const currentTest = QUnit.config.current;
-  const { finish } = currentTest;
-
-  currentTest.finish = async function () {
-    currentTest.testEnvironment = null;
-
-    gc();
-    gc();
-    gc();
-
-    // eslint-disable-next-line no-restricted-syntax, no-unused-vars
-    for (let i = 0; i < OwnerRefs.length; i++) {
-      let ref = OwnerRefs[i];
-      if (ref.deref()) {
-        let message = `Leaked an owner`;
-        currentTest.expected++;
-        currentTest.assert.pushResult({
-          result: false,
-          message: `${message} \nMore information has been printed to the console. Please use that information to help in debugging.\n\n`,
-        });
-      }
-    }
-
-    OwnerRefs = [];
-
-    // let finishResult = await finish.apply(this, arguments);
-    return await finish.apply(this, arguments);
-  };
-});
-
 import Application from '@ember/application';
-const originalBuildApplicationInstance = Application.prototype.buildInstance;
-Application.prototype.buildInstance = function buildInstance(options) {
-  let owner = originalBuildApplicationInstance.call(this, options);
-  OwnerRefs.push(new WeakRef(owner));
-  return owner;
-};
-
 import Engine from '@ember/engine';
-import { setupApplicationTest } from 'ember-qunit';
-const originalBuildEngineInstance = Engine.prototype.buildInstance;
-Engine.prototype.buildInstance = function buildInstance(options) {
-  let owner = originalBuildEngineInstance.call(this, options);
-  OwnerRefs.push(new WeakRef(owner));
-  return owner;
-};
+
+const HAS_GC = typeof gc === 'function';
+
+let OwnerRefs = [];
+if (HAS_GC) {
+  QUnit.on('testStart', () => {
+    const currentTest = QUnit.config.current;
+    const { finish } = currentTest;
+
+    currentTest.finish = async function () {
+      currentTest.testEnvironment = null;
+
+      gc();
+      gc();
+      gc();
+
+      // eslint-disable-next-line no-restricted-syntax, no-unused-vars
+      for (let i = 0; i < OwnerRefs.length; i++) {
+        let ref = OwnerRefs[i];
+        if (ref.deref()) {
+          let message = `Leaked an owner`;
+          currentTest.expected++;
+          currentTest.assert.pushResult({
+            result: false,
+            message: `${message} \nMore information has been printed to the console. Please use that information to help in debugging.\n\n`,
+          });
+        }
+      }
+
+      OwnerRefs = [];
+
+      // let finishResult = await finish.apply(this, arguments);
+      return await finish.apply(this, arguments);
+    };
+  });
+
+  const originalBuildApplicationInstance = Application.prototype.buildInstance;
+  Application.prototype.buildInstance = function buildInstance(options) {
+    let owner = originalBuildApplicationInstance.call(this, options);
+    OwnerRefs.push(new WeakRef(owner));
+    return owner;
+  };
+
+  const originalBuildEngineInstance = Engine.prototype.buildInstance;
+  Engine.prototype.buildInstance = function buildInstance(options) {
+    let owner = originalBuildEngineInstance.call(this, options);
+    OwnerRefs.push(new WeakRef(owner));
+    return owner;
+  };
+}
 
 function invertAssertExpectation(assert) {
   assert.test._originalPushResult = assert.test.pushResult;
@@ -93,6 +99,9 @@ module('Integration | Component | leaking-component', function (hooks) {
 
 module('Engines', function (hooks) {
   setupApplicationTest(hooks);
+  test('has `gc` present', function (assert) {
+    assert.strictEqual(typeof gc, 'function');
+  });
 
   test('it errors if the route has a leak', async function (assert) {
     assert.expect(0);
