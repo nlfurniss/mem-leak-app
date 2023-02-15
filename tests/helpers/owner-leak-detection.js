@@ -46,6 +46,7 @@ export function setupPerModuleLeakDetection() {
           QUnit.test(
             `tests leaking owner found within \`${testName}\``,
             function (assert) {
+              assert.expect(1);
               for (let owner of owners) {
                 assert.pushResult({
                   result: false,
@@ -87,6 +88,7 @@ export function setupAfterAllTestsOwnerLeakDetection() {
           QUnit.test(
             `tests leaking owner found within \`${testName}\``,
             function (assert) {
+              assert.expect(1);
               for (let owner of owners) {
                 assert.pushResult({
                   result: false,
