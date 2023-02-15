@@ -54,7 +54,7 @@ module('Engines', function (hooks) {
     await visit('/whatever/leak');
   });
 
-  test('it does not error if the route does have a leak', async function (assert) {
+  test('it does not error if the route does not have a leak', async function (assert) {
     assert.expect(0);
     await visit('/whatever/no-leak');
   });
